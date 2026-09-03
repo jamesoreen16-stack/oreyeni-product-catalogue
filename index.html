@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b6b4f">
+<link rel="manifest" href="manifest.json">
+<title>Oreyeni Product Catalogue</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#17221d;background:#f5f7f6}
+*{box-sizing:border-box}body{margin:0}.app{max-width:760px;margin:auto;min-height:100vh}
+header{background:#0b6b4f;color:white;padding:22px 16px 18px;position:sticky;top:0;z-index:5}
+h1{font-size:23px;margin:0 0 14px}.search{width:100%;padding:13px 15px;border:0;border-radius:12px;font-size:16px}
+main{padding:16px}.cats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:18px}
+.cat{border:1px solid #dce5e0;background:white;border-radius:14px;padding:15px;text-align:left;font-size:16px;font-weight:700}
+.cat.active{outline:2px solid #0b6b4f}.emoji{font-size:25px;display:block;margin-bottom:6px}
+.toolbar{display:flex;justify-content:space-between;align-items:center;margin:12px 0}.toolbar h2{font-size:18px;margin:0}
+button{cursor:pointer;border:0;border-radius:10px;padding:10px 13px;font-weight:700}
+.primary{background:#0b6b4f;color:#fff}.danger{background:#c62828;color:white}.muted{background:#e8efeb}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.card{background:white;border:1px solid #dce5e0;border-radius:14px;overflow:hidden}
+.thumb{height:150px;background:#e9efec;display:flex;align-items:center;justify-content:center;overflow:hidden}.thumb img,.thumb video{width:100%;height:100%;object-fit:cover}
+.cardbody{padding:11px}.card h3{font-size:16px;margin:0 0 5px}.price{font-weight:800;color:#0b6b4f}.small{font-size:12px;color:#63726b}
+.empty{text-align:center;color:#63726b;padding:35px 10px}
+.modal{position:fixed;inset:0;background:#0008;display:none;align-items:flex-end;z-index:20}.modal.show{display:flex}.sheet{background:#fff;width:100%;max-height:92vh;overflow:auto;border-radius:20px 20px 0 0;padding:18px}
+label{font-weight:700;font-size:13px;display:block;margin:12px 0 5px}input,textarea,select{width:100%;padding:11px;border:1px solid #ccd8d2;border-radius:10px;font:inherit}textarea{min-height:80px}
+.row{display:flex;gap:8px}.row>*{flex:1}.actions{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
+.preview{display:flex;gap:8px;overflow:auto;margin-top:8px}.preview img,.preview video{width:95px;height:75px;object-fit:cover;border-radius:8px}
+.detailMedia{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.detailMedia img,.detailMedia video{width:100%;border-radius:10px;max-height:260px;object-fit:cover}
+.close{float:right;background:#eef2ef;border-radius:50%;width:36px;height:36px}
+@media(min-width:600px){.cats{grid-template-columns:repeat(4,1fr)}.grid{grid-template-columns:repeat(3,1fr)}}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+<h1>Oreyeni Product Catalogue</h1>
+<input id="search" class="search" placeholder="🔍 Search products..." autocomplete="off">
+</header>
+<main>
+<div id="cats" class="cats"></div>
+<div class="toolbar"><h2 id="title">All Products</h2><button class="primary" id="addBtn">＋ Add Product</button></div>
+<div id="grid" class="grid"></div>
+</main>
+</div>
+
+<div id="formModal" class="modal"><div class="sheet">
+<button class="close" onclick="closeForm()">×</button><h2 id="formTitle">Add Product</h2>
+<form id="form">
+<input type="hidden" id="pid">
+<label>Product name</label><input id="name" required placeholder="e.g. HomePlus Pro">
+<div class="row"><div><label>Category</label><select id="category"></select></div><div><label>Price</label><input id="price" placeholder="₦0"></div></div>
+<label>Description</label><textarea id="description" placeholder="Short product description"></textarea>
+<label>Payment / Installment information</label><textarea id="payment" placeholder="e.g. Down payment, weekly plan..."></textarea>
+<label>Pictures</label><input id="images" type="file" accept="image/*" multiple>
+<label>Videos</label><input id="videos" type="file" accept="video/*" multiple>
+<div id="filePreview" class="preview"></div>
+<div class="actions"><button type="button" class="muted" onclick="closeForm()">Cancel</button><button class="primary">Save Product</button></div>
+</form></div></div>
+
+<div id="detailModal" class="modal"><div class="sheet">
+<button class="close" onclick="closeDetail()">×</button><div id="detail"></div>
+</div></div>
+
+<script>
+const CATS=[
+  ["all","📦","All Products"],["phones","📱","Phones"],["inverters","☀️","Inverters"],
+  ["solar","💡","Solar Lamps"],["tvs","📺","TVs"]
+];
+let products=[], active="all", editingId=null, newFiles=[];
+
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+
+function load(){products=JSON.parse(localStorage.getItem("opc_products")||"[]"); renderCats(); render();}
+function save(){localStorage.setItem("opc_products",JSON.stringify(products.map(p=>({...p,media:p.media||[]}))));}
+
+function renderCats(){
+  $("cats").innerHTML=CATS.map(c=>`<button class="cat ${active===c[0]?"active":""}" onclick="setCat('${c[0]}')"><span class="emoji">${c[1]}</span>${c[2]}</button>`).join("");
+}
+function setCat(c){active=c;renderCats();render();}
+function render(){
+  const q=$("search").value.toLowerCase().trim();
+  let list=products.filter(p=>(active==="all"||p.category===active)&&
+    (!q||`${p.name} ${p.description} ${p.category}`.toLowerCase().includes(q)));
+  $("title").textContent=(CATS.find(x=>x[0]===active)||CATS[0])[2];
+  $("grid").innerHTML=list.length?list.map(card).join(""):`<div class="empty" style="grid-column:1/-1">No products found.<br>Tap <b>＋ Add Product</b> to add your first item.</div>`;
+}
+function card(p){
+  const m=p.media?.[0];
+  let media=m?(m.type==="image"?`<img src="${m.data}">`:`<video src="${m.data}" muted></video>`):`<span style="font-size:40px">📦</span>`;
+  return `<article class="card" onclick="openDetail('${p.id}')"><div class="thumb">${media}</div><div class="cardbody"><h3>${esc(p.name)}</h3><div class="price">${esc(p.price||"Price not set")}</div><div class="small">${esc((CATS.find(x=>x[0]===p.category)||CATS[0])[2])}</div></div></article>`;
+}
+
+function openForm(id=null){
+  editingId=id; newFiles=[]; $("filePreview").innerHTML="";
+  $("formTitle").textContent=id?"Edit Product":"Add Product";
+  $("pid").value=id||"";
+  const p=id?products.find(x=>x.id===id):null;
+  $("name").value=p?.name||"";$("price").value=p?.price||"";$("description").value=p?.description||"";$("payment").value=p?.payment||"";
+  $("category").innerHTML=CATS.slice(1).map(c=>`<option value="${c[0]}" ${p?.category===c[0]?"selected":""}>${c[2]}</option>`).join("");
+  if(p?.media) p.media.forEach(m=>addPreview(m.data,m.type));
+  $("formModal").classList.add("show");
+}
+function closeForm(){$("formModal").classList.remove("show")}
+function addPreview(src,type){$("filePreview").insertAdjacentHTML("beforeend",type==="image"?`<img src="${src}">`:`<video src="${src}" controls></video>`)}
+async function filesToMedia(files,type){
+  return Promise.all([...files].map(f=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res({type,data:r.result,name:f.name});r.onerror=rej;r.readAsDataURL(f)})));
+}
+$("images").onchange=e=>{newFiles.push(...filesToMedia(e.target.files,"image"));[...e.target.files].forEach(f=>{const r=new FileReader();r.onload=()=>addPreview(r.result,"image");r.readAsDataURL(f)})};
+$("videos").onchange=e=>{newFiles.push(...filesToMedia(e.target.files,"video"));[...e.target.files].forEach(f=>{const r=new FileReader();r.onload=()=>addPreview(r.result,"video");r.readAsDataURL(f)})};
+
+$("form").onsubmit=async e=>{
+  e.preventDefault();
+  const media=(await Promise.all(newFiles)).flat();
+  const id=$("pid").value||crypto.randomUUID();
+  const old=id?products.find(p=>p.id===id):null;
+  const p={id,name:$("name").value.trim(),category:$("category").value,price:$("price").value.trim(),description:$("description").value.trim(),payment:$("payment").value.trim(),media:old?.media||[]};
+  if(media.length)p.media.push(...media);
+  if(old) products=products.map(x=>x.id===id?p:x); else products.unshift(p);
+  save();closeForm();render();
+};
+
+function openDetail(id){
+ const p=products.find(x=>x.id===id); if(!p)return;
+ $("detail").innerHTML=`<h2>${esc(p.name)}</h2><div class="small">${esc((CATS.find(x=>x[0]===p.category)||CATS[0])[2])}</div>
+ <h3 class="price">${esc(p.price||"Price not set")}</h3>
+ ${p.description?`<p>${esc(p.description)}</p>`:""}
+ ${p.payment?`<p><b>Payment:</b><br>${esc(p.payment).replace(/\n/g,"<br>")}</p>`:""}
+ <div class="detailMedia">${(p.media||[]).map(m=>m.type==="image"?`<img src="${m.data}" alt="">`:`<video src="${m.data}" controls></video>`).join("")||"<p>No media yet.</p>"}</div>
+ <div class="actions"><button class="muted" onclick="shareProduct('${p.id}')">📤 Share</button><button class="muted" onclick="closeDetail();openForm('${p.id}')">✏️ Edit</button><button class="danger" onclick="deleteProduct('${p.id}')">🗑 Delete</button></div>`;
+ $("detailModal").classList.add("show");
+}
+function closeDetail(){$("detailModal").classList.remove("show")}
+async function shareProduct(id){
+ const p=products.find(x=>x.id===id);if(!p)return;
+ const text=`${p.name}\n${p.price||""}\n${p.description||""}${p.payment?`\nPayment: ${p.payment}`:""}`;
+ if(navigator.share){try{await navigator.share({title:p.name,text})}catch(e){}}
+ else {await navigator.clipboard.writeText(text);alert("Product information copied.")}
+}
+function deleteProduct(id){if(confirm("Delete this product?")){products=products.filter(p=>p.id!==id);save();closeDetail();render()}}
+$("addBtn").onclick=()=>openForm();$("search").oninput=render;load();
+</script>
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('./service-worker.js').catch(()=>{});}</script>
+</body>
+</html>
