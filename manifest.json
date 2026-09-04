@@ -1,9 +1,11 @@
 {
   "name": "Oreyeni Product Catalogue",
   "short_name": "Oreyeni Catalogue",
+  "description": "Oreyeni Product Catalogue is an offline product catalogue for quickly accessing and sharing pictures, videos, prices and information about phones, inverters, solar lamps, TVs and other products.",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#f5f7f6",
+  "background_color": "#0b6b4f",
   "theme_color": "#0b6b4f",
-  "icons": []
+  "orientation": "portrait",
+  "lang": "en"
 }
